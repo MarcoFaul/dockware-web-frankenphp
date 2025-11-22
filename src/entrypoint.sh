@@ -65,14 +65,22 @@ if [ $RECOVERY_MODE = 0 ]; then
 
     if [ "$NODE_VERSION" != "not-set" ]; then
        echo "DOCKWARE: switching to Node ${NODE_VERSION}..."
-       nvm alias default ${NODE_VERSION}
-       # now make sure to at least have node and npm as sudo
-       # nvm itself is not possible by design
-       sudo rm -f /usr/local/bin/node
-       sudo rm -f /usr/local/bin/npm
-       sudo ln -s "$(which node)" "/usr/local/bin/node"
-       sudo ln -s "$(which npm)" "/usr/local/bin/npm"
-       nvm use ${NODE_VERSION}
+       # Check if the requested version is installed
+       if nvm list | grep -q "v${NODE_VERSION}"; then
+           nvm alias default ${NODE_VERSION}
+           nvm use ${NODE_VERSION}
+           # now make sure to at least have node and npm as sudo
+           # nvm itself is not possible by design
+           sudo rm -f /usr/local/bin/node
+           sudo rm -f /usr/local/bin/npm
+           sudo ln -s "$(which node)" "/usr/local/bin/node"
+           sudo ln -s "$(which npm)" "/usr/local/bin/npm"
+           echo "DOCKWARE: successfully switched to Node ${NODE_VERSION}"
+       else
+           echo "! WARNING: Version '${NODE_VERSION}' does not exist."
+           echo "! Available versions: $(nvm list --no-colors | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | sed 's/v//' | tr '\n' ' ')"
+           echo "! Using default Node version instead."
+       fi
        echo "-----------------------------------------------------------"
     fi
 
