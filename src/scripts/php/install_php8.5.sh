@@ -1,5 +1,4 @@
-apt-get install -y php8.5-fpm \
-                   php8.5-cli \
+apt-get install -y php8.5-cli \
                    php8.5-gd \
                    php8.5-iconv \
                    php8.5-intl \

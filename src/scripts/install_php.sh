@@ -28,25 +28,26 @@ for entry in "${PHP_VERSIONS[@]}"; do
     # PHP
     sh ./php/install_php$version.sh
 
-    cat /dockware/tmp/config/php/general.ini >| /etc/php/$version/fpm/conf.d/01-general.ini
-    cat /dockware/tmp/config/php/general.ini >| /etc/php/$version/cli/conf.d/01-general.ini
-    cat /dockware/tmp/config/php/cli.ini >| /etc/php/$version/cli/conf.d/01-general-cli.ini
+    # Only configure CLI as FrankenPHP handles web requests
+    if [ -d "/etc/php/$version/cli/" ]; then
+        cat /dockware/tmp/config/php/general.ini >| /etc/php/$version/cli/conf.d/01-general.ini
+        cat /dockware/tmp/config/php/cli.ini >| /etc/php/$version/cli/conf.d/01-general-cli.ini
+        
+        # -----------------------------------------------------------
+        # Xdebug (CLI only for FrankenPHP setup)
+        if [ -f "/dockware/tmp/config/php/xdebug-3.ini" ]; then
+            sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/xdebug-3.ini > /etc/php/$version/cli/conf.d/20-xdebug.ini
+        fi
 
-    # -----------------------------------------------------------
-    # Xdebug
-    cp /dockware/tmp/config/php/xdebug-3.ini /etc/php/$version/fpm/conf.d/20-xdebug.ini
-    cp /dockware/tmp/config/php/xdebug-3.ini /etc/php/$version/cli/conf.d/20-xdebug.ini
-    sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/xdebug-3.ini > /etc/php/$version/fpm/conf.d/20-xdebug.ini
-    sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/xdebug-3.ini > /etc/php/$version/cli/conf.d/20-xdebug.ini
-
-    # -----------------------------------------------------------
-    # Tideways
-    sudo ln -sf /usr/lib/tideways/tideways-php-$version.so /usr/lib/php/$phpFolderId/tideways.so
-
-    cp /dockware/tmp/config/php/tideways.ini /etc/php/$version/fpm/conf.d/20-tideways.ini
-    cp /dockware/tmp/config/php/tideways.ini /etc/php/$version/cli/conf.d/20-tideways.ini
-    sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/tideways.ini > /etc/php/$version/fpm/conf.d/20-tideways.ini
-    sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/tideways.ini > /etc/php/$version/cli/conf.d/20-tideways.ini
+        # -----------------------------------------------------------
+        # Tideways (CLI only for FrankenPHP setup)
+        if [ -f "/usr/lib/tideways/tideways-php-$version.so" ]; then
+            sudo ln -sf /usr/lib/tideways/tideways-php-$version.so /usr/lib/php/$phpFolderId/tideways.so || true
+            if [ -f "/dockware/tmp/config/php/tideways.ini" ]; then
+                sed "s/__PHP__FOLDER__ID/$phpFolderId/g" /dockware/tmp/config/php/tideways.ini > /etc/php/$version/cli/conf.d/20-tideways.ini
+            fi
+        fi
+    fi
 
 done
 
@@ -57,12 +58,12 @@ sudo update-alternatives --set php /usr/bin/php$DEFAULT_PHP_VERSION > /dev/null 
 
 # -----------------------------------------------------------------------------------------
 
-# Restart the default PHP-FPM service
-service php$DEFAULT_PHP_VERSION-fpm stop > /dev/null 2>&1
-service php$DEFAULT_PHP_VERSION-fpm start
+# Set PHP alternatives (no FPM needed for FrankenPHP)
 sudo update-alternatives --set php /usr/bin/php$DEFAULT_PHP_VERSION > /dev/null 2>&1
 
 # -----------------------------------------------------------------------------------------
 
-# Ensure the PHP user has rights on the session directory
-chown www-data:www-data -R /var/lib/php/sessions
+# Create session directory for CLI usage (if it exists)
+if [ -d "/var/lib/php/sessions" ]; then
+    chown www-data:www-data -R /var/lib/php/sessions
+fi

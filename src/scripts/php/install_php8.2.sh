@@ -1,4 +1,4 @@
-apt-get install -y  php8.2-fpm \
+apt-get install -y  php8.2-cli \
                     php8.2-gd \
                     php8.2-iconv \
                     php8.2-intl \
@@ -7,7 +7,6 @@ apt-get install -y  php8.2-fpm \
                     php8.2-pdo \
                     php8.2-mysql \
                     php8.2-curl \
-                    php8.2-cli \
                     php8.2-ldap \
                     php8.2-pgsql \
                     php8.2-gettext \

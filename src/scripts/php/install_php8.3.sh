@@ -1,4 +1,4 @@
-apt-get install -y  php8.3-fpm \
+apt-get install -y  php8.3-cli \
                     php8.3-gd \
                     php8.3-iconv \
                     php8.3-intl \
@@ -7,7 +7,6 @@ apt-get install -y  php8.3-fpm \
                     php8.3-pdo \
                     php8.3-mysql \
                     php8.3-curl \
-                    php8.3-cli \
                     php8.3-ldap \
                     php8.3-pgsql \
                     php8.3-gettext \

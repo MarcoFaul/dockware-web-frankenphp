@@ -1,32 +1,32 @@
 # Official Dockware Image with FrankenPHP
 # Copyright 2025 dasistweb GmbH
 #
+ARG IMAGE_VERSION=latest
+
 FROM dunglas/frankenphp:1-php8.3-bookworm
 LABEL title="Dockware web-frankenphp:latest" \
       version=${IMAGE_VERSION} \
       maintainer="dasistweb GmbH"
 
-ARG IMAGE_VERSION
-
 ## ***********************************************************************
 ##  IMAGE VARIABLES
 ## ***********************************************************************
-ENV TZ Europe/Berlin
-ENV PHP_VERSION 8.3
-ENV NODE_VERSION not-set
-ENV FRANKENPHP_CONFIG "worker /var/www/html/public/frankenphp-worker.php"
-ENV CADDY_ROOT /var/www/html/public
-ENV RECOVERY_MODE 0
-ENV SSH_USER not-set
-ENV SSH_PWD not-set
-ENV XDEBUG_REMOTE_HOST "host.docker.internal"
-ENV XDEBUG_CONFIG "idekey=PHPSTORM"
-ENV PHP_IDE_CONFIG "serverName=localhost"
-ENV XDEBUG_ENABLED 0
-ENV FILEBEAT_ENABLED 0
-ENV SUPERVISOR_ENABLED 0
-ENV TIDEWAYS_KEY not-set
-ENV BASH_ENV /var/www/.bashrc
+ENV TZ=Europe/Berlin
+ENV PHP_VERSION=8.3
+ENV NODE_VERSION=not-set
+ENV FRANKENPHP_CONFIG="worker /var/www/html/public/frankenphp-worker.php"
+ENV CADDY_ROOT=/var/www/html/public
+ENV RECOVERY_MODE=0
+ENV SSH_USER=not-set
+ENV SSH_PWD=not-set
+ENV XDEBUG_REMOTE_HOST="host.docker.internal"
+ENV XDEBUG_CONFIG="idekey=PHPSTORM"
+ENV PHP_IDE_CONFIG="serverName=localhost"
+ENV XDEBUG_ENABLED=0
+ENV FILEBEAT_ENABLED=0
+ENV SUPERVISOR_ENABLED=0
+ENV TIDEWAYS_KEY=not-set
+ENV BASH_ENV=/var/www/.bashrc
 
 # these are all our files that we need to setup the image
 COPY --chmod=0755 ./scripts /dockware/tmp/scripts
@@ -81,12 +81,16 @@ RUN echo "id:env-variables" && \
 RUN echo "id:basics" && \
     apt-get update && \
     # first install tools to add repositories
-    apt-get install -y wget gnupg2 sudo apt-transport-https software-properties-common && \
-    LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php && \
-    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add - && \
-    echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | tee /etc/apt/sources.list.d/elastic-7.x.list && \
-    sudo echo 'deb [signed-by=/usr/share/keyrings/tideways.gpg] https://packages.tideways.com/apt-packages-main any-version main' | sudo tee /etc/apt/sources.list.d/tideways.list && \
-    wget -qO - 'https://packages.tideways.com/key.gpg' | gpg --dearmor | sudo tee /usr/share/keyrings/tideways.gpg > /dev/null && \
+    apt-get install -y wget gnupg2 sudo apt-transport-https software-properties-common ca-certificates && \
+    # Add Ondrej PHP repository manually without using add-apt-repository
+    wget -qO - https://packages.sury.org/php/apt.gpg | gpg --dearmor | tee /usr/share/keyrings/php.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/php.gpg] https://packages.sury.org/php/ bookworm main" | tee /etc/apt/sources.list.d/php.list && \
+    # Add Elasticsearch repository
+    wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor | tee /usr/share/keyrings/elastic.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/7.x/apt stable main" | tee /etc/apt/sources.list.d/elastic-7.x.list && \
+    # Add Tideways repository
+    wget -qO - 'https://packages.tideways.com/key.gpg' | gpg --dearmor | tee /usr/share/keyrings/tideways.gpg > /dev/null && \
+    echo 'deb [signed-by=/usr/share/keyrings/tideways.gpg] https://packages.tideways.com/apt-packages-main any-version main' | tee /etc/apt/sources.list.d/tideways.list && \
     # update our repositories
     apt-get update && \
     # now have fun installing stuff (removed apache packages)
@@ -107,7 +111,7 @@ RUN echo "id:basics" && \
             rsync \
             supervisor \
             jpegoptim \
-            mysql-client \
+            default-mysql-client \
             git git-lfs patch \
             tideways-php tideways-daemon \
             filebeat && \

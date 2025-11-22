@@ -1,4 +1,4 @@
- apt-get install -y php8.0-fpm \
+ apt-get install -y php8.0-cli \
                     php8.0-gd \
                     php8.0-iconv \
                     php8.0-intl \
@@ -9,7 +9,6 @@
                     php8.0-apc \
                     php8.0-apcu \
                     php8.0-curl \
-                    php8.0-cli \
                     php8.0-ldap \
                     php8.0-pgsql \
                     php8.0-gettext \

@@ -1,5 +1,4 @@
-apt-get install -y  php8.4-fpm \
-                    php8.4-cli \
+apt-get install -y  php8.4-cli \
                     php8.4-gd \
                     php8.4-iconv \
                     php8.4-intl \

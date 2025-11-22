@@ -1,4 +1,4 @@
- apt-get install -y php8.1-fpm \
+ apt-get install -y php8.1-cli \
                     php8.1-gd \
                     php8.1-iconv \
                     php8.1-intl \
@@ -9,7 +9,6 @@
                     php8.1-apc \
                     php8.1-apcu \
                     php8.1-curl \
-                    php8.1-cli \
                     php8.1-ldap \
                     php8.1-pgsql \
                     php8.1-gettext \
