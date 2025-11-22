@@ -2,8 +2,9 @@
 # Copyright 2025 dasistweb GmbH
 #
 ARG IMAGE_VERSION=latest
+ARG PHP_VERSION=8.3
 
-FROM dunglas/frankenphp:1-php8.3-bookworm
+FROM dunglas/frankenphp:1-php${PHP_VERSION}-bookworm
 LABEL title="Dockware web-frankenphp:latest" \
       version=${IMAGE_VERSION} \
       maintainer="dasistweb GmbH"
@@ -12,7 +13,7 @@ LABEL title="Dockware web-frankenphp:latest" \
 ##  IMAGE VARIABLES
 ## ***********************************************************************
 ENV TZ=Europe/Berlin
-ENV PHP_VERSION=8.3
+ENV PHP_VERSION=${PHP_VERSION}
 ENV NODE_VERSION=not-set
 ENV FRANKENPHP_CONFIG="worker /var/www/html/public/frankenphp-worker.php"
 ENV CADDY_ROOT=/var/www/html/public

@@ -105,9 +105,8 @@ if [ $RECOVERY_MODE = 0 ]; then
        sh /var/www/scripts/bin/xdebug_disable.sh
     fi
 
-    # make sure the current PHP FPM is started
-    echo "DOCKWARE: starting PHP ${CURRENT_PHP_VERSION} FPM..."
-    sudo service php${CURRENT_PHP_VERSION}-fpm start
+    # FrankenPHP manages its own PHP runtime, no need to start FPM
+    echo "DOCKWARE: FrankenPHP provides PHP ${CURRENT_PHP_VERSION} runtime"
     echo "-----------------------------------------------------------"
 
     # create log directories for Caddy
@@ -152,10 +151,14 @@ if [ $RECOVERY_MODE = 0 ]; then
 
     echo "DOCKWARE: setting up Tideways daemon..."
     if [ "${TIDEWAYS_KEY}" != "not-set" ]; then
+        # Create Tideways configuration directory if it doesn't exist
+        sudo mkdir -p /etc/tideways
         echo 'tideways.api_key='${TIDEWAYS_KEY} | sudo tee -a /etc/tideways/tideways-daemon.ini
 
         # start tideways daemon
         sudo service tideways-daemon start
+    else
+        echo "Tideways API key not set, skipping configuration"
     fi
 
     echo "DOCKWARE: creating sample index.php..."

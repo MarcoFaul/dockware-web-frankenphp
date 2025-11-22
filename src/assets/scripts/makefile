@@ -23,30 +23,38 @@ ifndef version
 	$(warning Provide the required PHP version using "make switch-php version=x.y")
 	@exit 1;
 endif
-	@# ATTENTION, keep this steps exactly like they are. they ensure that its fail-fast
-	@# non existing PHP versions will do nothing, switching to the same php version will also work
+	@# FrankenPHP uses its own PHP runtime, only configure CLI for development
 	@# ---------------------------------------------------------------------------------------
-	sudo sed -i '/^date\.timezone/c\date.timezone = $(TZ)' /etc/php/$(version)/fpm/conf.d/01-general.ini
-	sudo sed -i '/^date\.timezone/c\date.timezone = $(TZ)' /etc/php/$(version)/cli/conf.d/01-general.ini
+	@# Determine FrankenPHP built-in PHP version dynamically
+	@FRANKENPHP_VERSION=$$(command -v php >/dev/null 2>&1 && php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo ""); \
+	if [ "$(version)" = "$$FRANKENPHP_VERSION" ] && command -v php >/dev/null 2>&1; then \
+		echo "Using FrankenPHP built-in PHP $(version)"; \
+		export PHP_VERSION=$(version); \
+	elif command -v php$(version) >/dev/null 2>&1; then \
+		if [ -f "/etc/php/$(version)/cli/conf.d/01-general.ini" ]; then \
+			sudo sed -i '/^date\.timezone/c\date.timezone = $(TZ)' /etc/php/$(version)/cli/conf.d/01-general.ini; \
+		fi; \
+		sudo update-alternatives --set php $$(which php$(version)) 2>/dev/null || true; \
+		export PHP_VERSION=$(version); \
+		echo "Switched CLI PHP to version $(version)"; \
+	else \
+		echo "PHP version $(version) not found"; \
+		echo "Available PHP versions:"; \
+		ls /usr/bin/php* 2>/dev/null | grep -E 'php[0-9]\.' | sort || echo "No additional PHP versions found"; \
+		if [ -n "$$FRANKENPHP_VERSION" ]; then \
+			echo "FrankenPHP provides PHP $$FRANKENPHP_VERSION by default"; \
+		fi; \
+		echo "Version $(version) may not be installed"; \
+		exit 1; \
+	fi
 	@# ---------------------------------------------------------------------------------------
-	@# Start new PHP to see if its existing, then stop current one, and if we use the same php version that
-	@# is currently used, just make sure to start it again ;)
-	sudo service php$(version)-fpm start
-	sudo service php$(PHP_VERSION_CURRENT)-fpm stop
-	sudo service php$(version)-fpm start
-	export PHP_VERSION=$(version)
-	@# ---------------------------------------------------------------------------------------
-	@# Update Caddy configuration with the new PHP version
-	@# Update environment variable for current session
-	export PHP_VERSION=$(version)
-	@# ---------------------------------------------------------------------------------------
-	@# last but not least update php for cli -> this is used for our variable in here
-	sudo update-alternatives --set php /usr/bin/php$(version)
+	@# Handle Xdebug for CLI
 ifeq ($(XDEBUG_STATUS),1)
 	make xdebug-on
 else
 	make xdebug-off
 endif
+	@echo "Note: FrankenPHP uses its own PHP runtime. Container restart may be needed for web requests."
 	php -v
 
 switch-node: ##1 Switches to another supported NodeJS version, [make switch-node version=x.y]
@@ -60,10 +68,10 @@ permission-repair: ##1 Repairs file permissions
 	sudo chown -R 33:33 /var/www/html/*
 	sudo chmod -R 775 /var/www/html
 
-restart-php: ##1 Restarts PHP-FPM service
-	sudo service php$(PHP_VERSION_CURRENT)-fpm stop
-	sudo service php$(PHP_VERSION_CURRENT)-fpm start
-	@echo "PHP-FPM restarted. FrankenPHP will automatically detect the changes."
+restart-php: ##1 Note: PHP runtime is managed by FrankenPHP
+	@echo "FrankenPHP manages its own PHP runtime."
+	@echo "To restart the PHP runtime, restart the container:"
+	@echo "  docker restart <container_name>"
 
 restart-frankenphp: ##1 Restarts FrankenPHP (requires container restart)
 	@echo "FrankenPHP restart requires container restart."
