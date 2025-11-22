@@ -1,5 +1,5 @@
 name: Release Image
-run-name: dockware/web:${{ github.event.inputs.version }}, latest ${{ github.event.inputs.setLatest }}
+run-name: diwmarco/web-frankenphp:${{ github.event.inputs.version }}, latest ${{ github.event.inputs.setLatest }}
 
 on:
   workflow_dispatch:

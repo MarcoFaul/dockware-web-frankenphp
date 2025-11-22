@@ -48,15 +48,15 @@ build: ##3 Builds the image
 ifndef version
 	$(error Please provide the argument version=xyz to run the command)
 endif
-	@cd ./src && DOCKER_BUILDKIT=1 docker build --build-arg IMAGE_VERSION=$(version) -t dockware/web:$(version) .
+	@cd ./src && DOCKER_BUILDKIT=1 docker build --build-arg IMAGE_VERSION=$(version) -t diwmarco/web-frankenphp:$(version) .
 
 analyze: ##3 Shows the size of the image
 ifndef version
 	$(error Please provide the argument version=xyz to run the command)
 endif
-	docker history --format "{{.CreatedBy}}\t\t{{.Size}}" dockware/web:$(version) | grep -v "0B"
+	docker history --format "{{.CreatedBy}}\t\t{{.Size}}" diwmarco/web-frankenphp:$(version) | grep -v "0B"
 	# --------------------------------------------------
-	docker save -o web.tar dockware/web:$(version)
+	docker save -o web.tar diwmarco/web-frankenphp:$(version)
 	gzip web.tar
 	ls -lh web.tar.gz
 	# --------------------------------------------------

@@ -1,0 +1,113 @@
+# Caddy configuration for FrankenPHP worker mode
+{
+	# Enable FrankenPHP
+	frankenphp {
+		worker /var/www/html/public/frankenphp-worker.php {env FRANKENPHP_CONFIG}
+	}
+	
+	# Admin interface
+	admin 0.0.0.0:2019
+	
+	# Global options
+	auto_https off
+	http_port 80
+	https_port 443
+}
+
+# Main site configuration
+:80, :443 {
+	root * /var/www/html/public
+	
+	# Enable automatic HTTPS
+	tls internal
+	
+	# PHP handling with FrankenPHP
+	php_fastcgi * unix//var/run/php/php{env.PHP_VERSION}-fpm.sock
+	
+	# Handle static files first
+	file_server
+	
+	# Try files in order: exact file, directory with index.php, fallback to index.php
+	try_files {path} {path}/ /index.php?{query}
+	
+	# Security headers
+	header {
+		# Remove server identification
+		-Server
+		
+		# Security headers
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	
+	# Gzip compression
+	encode {
+		gzip 6
+		zstd
+	}
+	
+	# Logging
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100mb
+			roll_keep 5
+		}
+		format json
+	}
+	
+	# Error logging  
+	error /var/log/caddy/error.log
+	
+	# Development specific settings
+	@development {
+		header_regexp User-Agent (?i)(chrome|firefox|safari)
+	}
+	
+	# Handle common static files
+	@static {
+		path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+	}
+	handle @static {
+		header Cache-Control "public, max-age=31536000"
+		file_server
+	}
+	
+	# Block access to sensitive files
+	@blocked {
+		path *.env* *.log composer.json composer.lock package*.json *.git* *.sh *.sql
+	}
+	handle @blocked {
+		respond 404
+	}
+	
+	# Handle PHP files
+	@php {
+		path *.php
+	}
+	handle @php {
+		php_fastcgi * unix//var/run/php/php{env.PHP_VERSION}-fpm.sock {
+			env SCRIPT_FILENAME {file}
+			env DOCUMENT_ROOT {root}
+			env REQUEST_METHOD {method}
+			env REQUEST_URI {uri}
+			env QUERY_STRING {query}
+			env CONTENT_TYPE {header.content-type}
+			env CONTENT_LENGTH {header.content-length}
+			env HTTPS {tls}
+			env SERVER_SOFTWARE "Caddy/FrankenPHP"
+			env REMOTE_ADDR {remote_host}
+			env REMOTE_PORT {remote_port}
+			env SERVER_ADDR {host}
+			env SERVER_PORT {port}
+			env SERVER_NAME {host}
+		}
+	}
+}
+
+# Health check endpoint
+:8080 {
+	respond /health "OK" 200
+	respond /ready "READY" 200
+}

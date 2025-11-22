@@ -1,5 +1,5 @@
 name: Nightly Build
-run-name: dockware/web:dev-main
+run-name: diwmarco/web-frankenphp:dev-main
 
 on:
   workflow_dispatch:

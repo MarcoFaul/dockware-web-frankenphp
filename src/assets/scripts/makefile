@@ -36,11 +36,9 @@ endif
 	sudo service php$(version)-fpm start
 	export PHP_VERSION=$(version)
 	@# ---------------------------------------------------------------------------------------
-	@# if that all worked, switch the apache config now...that avoids breaking the files
-	@# pipe the first command to dev/null to avoid ugly warnings in entrypoint boot script if old placeholder does not exist anymore
-	sudo sed -i 's/__dockware_php_version__/'$(version)'/g' /etc/apache2/sites-enabled/000-default.conf 2>/dev/null
-	sudo sed -i 's/'php$(PHP_VERSION_CURRENT)-fpm.sock'/'php$(version)-fpm.sock'/g' /etc/apache2/sites-enabled/000-default.conf
-	sudo service apache2 restart
+	@# Update Caddy configuration with the new PHP version
+	@# Update environment variable for current session
+	export PHP_VERSION=$(version)
 	@# ---------------------------------------------------------------------------------------
 	@# last but not least update php for cli -> this is used for our variable in here
 	sudo update-alternatives --set php /usr/bin/php$(version)
@@ -53,7 +51,7 @@ endif
 
 switch-node: ##1 Switches to another supported NodeJS version, [make switch-node version=x.y]
 ifndef version
-	$(warning Provide the required PHP version using "make switch-php version=x.y")
+	$(warning Provide the required Node version using "make switch-node version=x.y")
 	@exit 1;
 endif
 	nvm use $(version)
@@ -62,10 +60,14 @@ permission-repair: ##1 Repairs file permissions
 	sudo chown -R 33:33 /var/www/html/*
 	sudo chmod -R 775 /var/www/html
 
-restart-php: ##1 Restarts FPM and Apache2
+restart-php: ##1 Restarts PHP-FPM service
 	sudo service php$(PHP_VERSION_CURRENT)-fpm stop
 	sudo service php$(PHP_VERSION_CURRENT)-fpm start
-	sudo service apache2 restart
+	@echo "PHP-FPM restarted. FrankenPHP will automatically detect the changes."
+
+restart-frankenphp: ##1 Restarts FrankenPHP (requires container restart)
+	@echo "FrankenPHP restart requires container restart."
+	@echo "Run: docker restart <container_name>"
 
 # -------------------------------------------------------------------------------------------------
 

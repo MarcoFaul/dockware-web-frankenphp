@@ -12,19 +12,17 @@ echo "68 69 20 64 65 76 65 6C 6F 70 65 72 2C 20 6E 69 63 65 20 74 6F 20 6D 65 65
 echo "6c 6f 6f 6b 69 6e 67 20 66 6f 72 20 61 20 6a 6f 62 3f 20 77 72 69 74 65 20 75 73 20 61 74 20 6a 6f 62 73 40 64 61 73 69 73 74 77 65 62 2e 64 65"
 echo ""
 echo "*******************************************************"
-echo "** DOCKWARE IMAGE: web"
+echo "** DOCKWARE IMAGE: web-frankenphp"
 echo "** Version: $(cat /dockware/version.txt)"
 echo "** Built: $(cat /dockware/build-date.txt)"
 echo "** Copyright $(cat /dockware/copyright.txt)"
 echo "*******************************************************"
 echo ""
-echo "launching dockware...please wait..."
+echo "launching dockware with FrankenPHP...please wait..."
 echo ""
 
 set -e
 
-
-source /etc/apache2/envvars
 source /var/www/.bashrc
 
 # this is important to automatically use the bashrc file
@@ -88,8 +86,6 @@ if [ $RECOVERY_MODE = 0 ]; then
       cd /var/www && make switch-php version=${CURRENT_PHP_VERSION}
     fi
 
-    sudo service apache2 stop
-
     CURRENT_PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
 
     # somehow we (once) had the problem that composer does not find a HOME directory this was the solution
@@ -101,111 +97,121 @@ if [ $RECOVERY_MODE = 0 ]; then
        sh /var/www/scripts/bin/xdebug_disable.sh
     fi
 
-    if [ $TIDEWAYS_KEY != "not-set" ]; then
-        echo "DOCKWARE: activating Tideways...."
-        sudo sed -i 's/__DOCKWARE_VAR_TIDEWAYS_API_KEY__/'${TIDEWAYS_KEY}'/g' /etc/php/${CURRENT_PHP_VERSION}/fpm/conf.d/20-tideways.ini
-        sudo sed -i 's/__DOCKWARE_VAR_TIDEWAYS_API_KEY__/'${TIDEWAYS_KEY}'/g' /etc/php/${CURRENT_PHP_VERSION}/cli/conf.d/20-tideways.ini
-        nohup sudo tideways-daemon --log=/var/log/tideways/daemon.log > /dev/null 2>&1 &
-        ps aux | grep tideways-daemon
-        echo "-----------------------------------------------------------"
-    else
-        echo "DOCKWARE: Tideways not activated. Disabling..."
-        if [ -f /etc/php/${CURRENT_PHP_VERSION}/fpm/conf.d/20-tideways.ini ]; then
-            sudo mv /etc/php/${CURRENT_PHP_VERSION}/fpm/conf.d/20-tideways.ini /etc/php/${CURRENT_PHP_VERSION}/fpm/conf.d/20-tideways.disabled
-        fi
-        if [ -f /etc/php/${CURRENT_PHP_VERSION}/cli/conf.d/20-tideways.ini ]; then
-            sudo mv /etc/php/${CURRENT_PHP_VERSION}/cli/conf.d/20-tideways.ini /etc/php/${CURRENT_PHP_VERSION}/cli/conf.d/20-tideways.disabled
-        fi
-    fi
-
-    # --------------------------------------------------
-    # APACHE
-    # first set the correct doc root, because we need it for the php switch below
-    sudo sed -i 's#__dockware_apache_docroot__#'${APACHE_DOCROOT}'#g' /etc/apache2/sites-enabled/000-default.conf
-    sudo sed -i 's#__dockware_php_version__#'${CURRENT_PHP_VERSION}'#g' /etc/apache2/sites-enabled/000-default.conf
-    # sometimes the internal docker structure leaves
-    # some pid files existing. the container will be recreated....but
-    # in reality it's not! thus there might be the problem
-    # that an older pid file exists, which leads to the following error:
-    #   - "httpd (pid 13) already running"
-    # to avoid this, we simple remove an existing file
-    sudo rm -f /var/run/apache2/apache2.pid
-    # also, sometimes port 80 is used? happens if you have lots of local containers i think
-    # so let's just kill that, otherwise the container won't start
-    sudo lsof -t -i tcp:80 | sudo xargs kill >/dev/null 2>&1 || true;
-
-    # start test and start apache
-    echo "DOCKWARE: testing and starting Apache..."
-    sudo apache2ctl configtest
-    sudo service apache2 restart
+    # make sure the current PHP FPM is started
+    echo "DOCKWARE: starting PHP ${CURRENT_PHP_VERSION} FPM..."
+    sudo service php${CURRENT_PHP_VERSION}-fpm start
     echo "-----------------------------------------------------------"
-    # --------------------------------------------------
 
+    # create log directories for Caddy
+    sudo mkdir -p /var/log/caddy
+    sudo chown -R www-data:www-data /var/log/caddy
+    sudo mkdir -p /var/log/php
+    sudo chown -R www-data:www-data /var/log/php
+
+    # Configure Caddy environment variables
+    export PHP_VERSION=${CURRENT_PHP_VERSION}
+    
+    if [ $SUPERVISOR_ENABLED = 1 ]; then
+       echo "DOCKWARE: starting supervisord..."
+       sudo service supervisor start
+    fi
 
     if [ $FILEBEAT_ENABLED = 1 ]; then
-       echo "DOCKWARE: activating Filebeat..."
-       sudo service filebeat start --strict.perms=false
-       echo "-----------------------------------------------------------"
+        sudo service filebeat start
     fi
 
-    if [ $SUPERVISOR_ENABLED = 1 ]; then
-         echo "DOCKWARE: activating Supervisor..."
-         sudo service supervisor start
-         echo "-----------------------------------------------------------"
+    # prepare the bashrc file for the bash
+    # this is from the templates in the assets folder
+    echo 'export PS1="\u@\h:\w$ "' > /var/www/.bashrc
+    echo 'source ~/.bashrc' >> /var/www/.profile
+
+    # if the project directory exists, add it to our PATH
+    if [ -d "/var/www/html" ]; then
+       echo 'cd /var/www/html' >> /var/www/.bashrc
+       # make sure we have this as owner
+       sudo chown -R www-data:www-data /var/www/html
     fi
 
-
-    # before starting any commands
-    # we always need to ensure we are back in our
-    # configured WORKDIR of the container
-    echo "-----------------------------------------------------"
-    cd $CONTAINER_STARTUP_DIR
-
-    # now let's check if we have a custom boot script that
-    # should run after our other startup scripts.
-    file="/var/www/boot_end.sh"
-    if [ -f "$file" ] ; then
-        sh $file
+    if [ -d "/var/www/html/vendor/bin" ]; then
+       echo 'export PATH="$PATH:/var/www/html/vendor/bin"' >> /var/www/.bashrc
     fi
 
-    echo ""
-    echo "WOHOOO, container IS READY :) - let's get started"
-    echo "-----------------------------------------------------"
-    echo "PHP: $(php -v | grep cli)"
-    echo "Apache DocRoot: ${APACHE_DOCROOT}"
+    echo 'alias ll="ls -la"' >> /var/www/.bashrc
 
-else
+    # make sure our user can access the bashrc
+    sudo chown www-data:www-data /var/www/.bashrc
+    sudo chown www-data:www-data /var/www/.profile
 
-    echo ""
-    echo "Dockware has been started in RECOVERY_MODE."
-    echo "Nothing has been executed or initialized..."
-    echo ""
+    echo "DOCKWARE: setting up Tideways daemon..."
+    if [ "${TIDEWAYS_KEY}" != "not-set" ]; then
+        echo 'tideways.api_key='${TIDEWAYS_KEY} | sudo tee -a /etc/tideways/tideways-daemon.ini
 
-    # build the recovery mode file (for SVRUnit Tests
-    echo "enabled" > /var/www/recovery.txt
+        # start tideways daemon
+        sudo service tideways-daemon start
+    fi
+
+    echo "DOCKWARE: creating sample index.php..."
+    if [ ! -f "/var/www/html/public/index.php" ]; then
+        mkdir -p /var/www/html/public
+        echo "<?php echo 'Hello from Dockware with FrankenPHP!'; phpinfo(); ?>" > /var/www/html/public/index.php
+        sudo chown www-data:www-data /var/www/html/public/index.php
+    fi
+
+    echo "-----------------------------------------------------------"
 
 fi
 
-# always execute custom commands in here.
-# if a custom command is provided, then the container
-# will automatically exit after it.
-# that's somehow just how it works.
-# otherwise it will continue with the code below
-exec "$@"
+cd $CONTAINER_STARTUP_DIR
 
-
-# now create the final file to tell our health checks
-# that the container is ready to use
-touch /var/www/container.launched
-
-
-# we still need this to allow custom events
-# such as our BUILD_PLUGIN feature to exit the container
-if [[ ! -z "$DOCKWARE_CI" ]]; then
-    # CONTAINER WAS STARTED IN NON-BLOCKING CI MODE...."
-    # DOCKWARE WILL NOW EXIT THE CONTAINER"
-    echo ""
-else
-    tail -f /dev/null
+# it's possible to add a custom boot script on startup AFTER
+# the original startup. so we test if it exists and just execute it
+file="/var/www/boot_end.sh"
+if [ -f "$file" ] ; then
+    sh $file
 fi
 
+echo ""
+echo "WOHOOO, diwmarco/web-frankenphp:frankenphp IS READY :) - let's get you started"
+echo "-----------------------------------------------------"
+echo ""
+echo "DOCKWARE CHANGELOG: https://dockware.io/docs/changelog"
+echo ""
+echo "PHP: $(php -v | head -n 1)"
+echo "Node: $(node -v)"
+echo "NPM: $(npm -v)"
+echo "Yarn: $(yarn -v)"
+echo "Composer: $(composer --version | head -n 1)"
+echo ""
+
+if [ ! -z "$SSH_USER" ] && [ "$SSH_USER" != "not-set" ]; then
+    echo "SSH USER: ${SSH_USER}"
+    echo "SSH PWD: ${SSH_PWD}"
+else
+    echo "SSH USER: dockware"
+    echo "SSH PWD: dockware"
+fi
+
+echo ""
+
+if [ "${TIDEWAYS_KEY}" != "not-set" ]; then
+    echo "TIDEWAYS: ENABLED"
+else
+    echo "TIDEWAYS: DISABLED"
+fi
+
+if [ $XDEBUG_ENABLED = 1 ]; then
+    echo "XDEBUG: ENABLED"
+else
+    echo "XDEBUG: DISABLED"
+fi
+
+echo ""
+echo "-----------------------------------------------------"
+
+# create a file in here so that our healthcheck
+# recognizes that the container is ready
+sudo touch /var/www/container.launched
+
+# Start FrankenPHP with Caddy using the configured settings
+echo "DOCKWARE: starting FrankenPHP with Caddy..."
+exec frankenphp run --config /etc/caddy/Caddyfile --adapter caddyfile

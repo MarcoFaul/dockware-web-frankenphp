@@ -29,7 +29,7 @@ ifndef version
 	$(error Please provide the argument version=xyz to run the command)
 endif
 	docker rm -f web_cypress || true
-	docker run --rm -p 1000:80 --name web_cypress -d dockware/web:$(version)
+	docker run --rm -p 1000:80 --name web_cypress -d diwmarco/web-frankenphp:$(version)
 
 stop-env: ##2 Stops the environment
 	docker stop web_cypress

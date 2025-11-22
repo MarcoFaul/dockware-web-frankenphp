@@ -1,11 +1,10 @@
-# Official Dockware Image
+# Official Dockware Image with FrankenPHP
 # Copyright 2025 dasistweb GmbH
 #
-FROM ubuntu:24.04
-LABEL title="Dockware web:latest" \
+FROM dunglas/frankenphp:1-php8.3-bookworm
+LABEL title="Dockware web-frankenphp:latest" \
       version=${IMAGE_VERSION} \
       maintainer="dasistweb GmbH"
-
 
 ARG IMAGE_VERSION
 
@@ -13,9 +12,10 @@ ARG IMAGE_VERSION
 ##  IMAGE VARIABLES
 ## ***********************************************************************
 ENV TZ Europe/Berlin
-ENV PHP_VERSION not-set
+ENV PHP_VERSION 8.3
 ENV NODE_VERSION not-set
-ENV APACHE_DOCROOT /var/www/html/public
+ENV FRANKENPHP_CONFIG "worker /var/www/html/public/frankenphp-worker.php"
+ENV CADDY_ROOT /var/www/html/public
 ENV RECOVERY_MODE 0
 ENV SSH_USER not-set
 ENV SSH_PWD not-set
@@ -36,6 +36,12 @@ COPY --chmod=0755 ./config /dockware/tmp/config
 COPY --chmod=0755 ./assets/scripts/makefile /var/www/makefile
 COPY --chmod=0755 ./assets/scripts/bin /var/www/scripts/bin
 
+# Caddy configuration
+COPY --chmod=0644 ./config/caddy/Caddyfile /etc/caddy/Caddyfile
+
+# FrankenPHP worker script
+COPY --chmod=0644 ./config/frankenphp/worker.php /var/www/html/public/frankenphp-worker.php
+
 # now comment haha, thats clear
 COPY --chmod=0755 entrypoint.sh /entrypoint.sh
 
@@ -54,7 +60,7 @@ RUN mkdir -p /dockware && \
 RUN echo "id:env-variables" && \
     echo "export TZ=${TZ}" >> /etc/profile \
     && echo "export PHP_VERSION=${PHP_VERSION}" >> /etc/profile \
-    && echo "export APACHE_DOCROOT=${APACHE_DOCROOT}" >> /etc/profile \
+    && echo "export CADDY_ROOT=${CADDY_ROOT}" >> /etc/profile \
     && echo "export NODE_VERSION=${NODE_VERSION}" >> /etc/profile \
     && echo "export RECOVERY_MODE=${RECOVERY_MODE}" >> /etc/profile \
     && echo "export SSH_USER=${SSH_USER}" >> /etc/profile \
@@ -65,7 +71,8 @@ RUN echo "id:env-variables" && \
     && echo "export PHP_IDE_CONFIG=${PHP_IDE_CONFIG}" >> /etc/profile \
     && echo "export FILEBEAT_ENABLED=${FILEBEAT_ENABLED}" >> /etc/profile \
     && echo "export SUPERVISOR_ENABLED=${SUPERVISOR_ENABLED}" >> /etc/profile \
-    && echo "export TIDEWAYS_KEY=${TIDEWAYS_KEY}" >> /etc/profile
+    && echo "export TIDEWAYS_KEY=${TIDEWAYS_KEY}" >> /etc/profile \
+    && echo "export FRANKENPHP_CONFIG=${FRANKENPHP_CONFIG}" >> /etc/profile
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##  BASE REQUIREMENTS
@@ -82,7 +89,7 @@ RUN echo "id:basics" && \
     wget -qO - 'https://packages.tideways.com/key.gpg' | gpg --dearmor | sudo tee /usr/share/keyrings/tideways.gpg > /dev/null && \
     # update our repositories
     apt-get update && \
-    # now have fun installing stuff
+    # now have fun installing stuff (removed apache packages)
     apt-get install -y --no-install-recommends \
             gosu \
             make \
@@ -102,14 +109,12 @@ RUN echo "id:basics" && \
             jpegoptim \
             mysql-client \
             git git-lfs patch \
-            apache2 libapache2-mod-fcgid  \
             tideways-php tideways-daemon \
             filebeat && \
     mkdir /var/run/sshd && \
     ln -fs /usr/share/zoneinfo/Europe/Berlin /etc/localtime && echo "${TZ}" > /etc/timezone && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##  USER MANAGEMENT
@@ -149,44 +154,6 @@ RUN echo "id:users" && \
     chmod 0700 /var/www/.ssh && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-
-# -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-##  APACHE CONFIGURATION
-# -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-RUN echo "id:apache" && \
-    cp /dockware/tmp/config/apache/http2.conf /etc/apache2/conf-available/http2.conf && \
-    cp /dockware/tmp/config/apache/apache2.conf /etc/apache2/apache2.conf && \
-    cp /dockware/tmp/config/apache/ports.conf /etc/apache2/ports.conf && \
-    cp /dockware/tmp/config/apache/sites.conf /etc/apache2/sites-enabled/000-default.conf && \
-    a2enmod headers rewrite expires proxy proxy_http proxy_wstunnel actions fcgid alias proxy_fcgi http2 ssl && \
-    sudo a2enconf http2 && \
-    sudo a2dismod mpm_prefork > /dev/null 2>&1 && \
-    sudo a2enmod mpm_event > /dev/null 2>&1 && \
-    # remove the standard apache index file
-    mkdir -p /var/www/html && \
-    rm -rf /var/www/html/* && \
-    chown -R www-data:www-data /var/www/html && \
-    sudo -u www-data sh -c 'mkdir -p /var/www/html/public'  && \
-    # make sure the configured log folder exists and is writeable
-    chmod -R 0777 /var/www && \
-    chgrp -R www-data /var/log/apache2 && \
-    mkdir -p /var/log/mysql && \
-    chgrp -R www-data /var/log/mysql &&\
-    mkdir /var/log/php -p  && \
-    touch /var/log/php/cli_errors.log && \
-    touch /var/log/php/fpm_errors.log && \
-    chown -R www-data:www-data /var/log/php && \
-    chmod 0755 /var/log/php && \
-    ## ***********************************************************************
-    ##  MOD_SSL
-    ##  create SSL certificate
-    ## ***********************************************************************
-    mkdir /etc/apache2/ssl && \
-    openssl req -new -x509 -days 365 -sha1 -newkey rsa:2048 -nodes -keyout /etc/apache2/ssl/server.key -out /etc/apache2/ssl/server.crt -subj '/O=Company/OU=Department/CN=localhost' && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##  PHP INSTALLATION
 # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -201,9 +168,15 @@ RUN echo "id:php" && \
     chmod 755 /tmp/composer.phar && \
     mv /tmp/composer.phar /usr/local/bin/composer && \
     chown -R 33:33 /var/www/.composer && \
+    # make sure the configured log folder exists and is writeable
+    chmod -R 0777 /var/www && \
+    mkdir /var/log/php -p  && \
+    touch /var/log/php/cli_errors.log && \
+    touch /var/log/php/fpm_errors.log && \
+    chown -R www-data:www-data /var/log/php && \
+    chmod 0755 /var/log/php && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 
 ## ***********************************************************************
 ##  NODE INSTALLATION
@@ -215,7 +188,6 @@ RUN echo "id:node" && \
     npm config set cache /var/www/.npm && \
     cd /var/www && npm install -g --no-install-recommends yarn && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 
 ## ***********************************************************************
 ##  PERMISSIONS

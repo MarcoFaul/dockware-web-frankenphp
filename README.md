@@ -1,8 +1,8 @@
 # Dockware WEB
 
-[![MIT licensed](https://img.shields.io/github/license/dockware/web.svg?style=flat-square)](https://github.com/dockware/dockware/blob/master/LICENSE)
-![Docker Pulls](https://img.shields.io/docker/pulls/dockware/web)
-![Docker Image Size](https://img.shields.io/docker/image-size/dockware/web)
+[![MIT licensed](https://img.shields.io/github/license/MarcoFaul/dockware-web-frankenphp.svg?style=flat-square)](https://github.com/dockware/dockware/blob/master/LICENSE)
+![Docker Pulls](https://img.shields.io/docker/pulls/MarcoFaul/dockware-web-frankenphp)
+![Docker Image Size](https://img.shields.io/docker/image-size/MarcoFaul/dockware-web-frankenphp)
 
 Welcome to the dockware Docker images! For more information, visit [dockware.io](https://dockware.io).
 
@@ -20,7 +20,7 @@ without the hazzle of setting up your local environment.
 ## Quick Start
 
 ```bash 
-docker run -p 80:80 dockware/web:latest
+docker run -p 80:80 diwmarco/web-frankenphp:latest
 ```
 
 That's it, connect into the container and start coding.
@@ -31,7 +31,7 @@ to PHP 8.4 and Node 22.
 
 ```yaml
   website:
-    image: dockware/web:latest
+    image: diwmarco/web-frankenphp:latest
     volumes:
       - "./src:/var/www/html"
     environment:
